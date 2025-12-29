@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>French Conjugation Game (Mobile)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: system-ui, sans-serif;
+  background: #111;
+  user-select: none;
+}
+
+/* TOP BAR */
+#topBar {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #000;
+  color: #fff;
+  font-size: 14px;
+}
+
+/* GAME AREA */
+#game {
+  position: relative;
+  width: 360px;
+  height: 520px;
+  margin: 8px auto;
+  border: 2px solid #fff;
+  background: url("tricolor.svg") center / cover no-repeat;
+  overflow: hidden;
+}
+
+/* DARKEN BACKGROUND (NO TOUCH CAPTURE) */
+#game::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* PAUSE BUTTON */
+#pauseBtn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  background: #ffd400;
+  color: #000;
+}
+
+/* COLUMNS */
+.column {
+  position: absolute;
+  bottom: 0;
+  width: 60px;
+  height: 100%;
+  border-left: 1px solid rgba(255,255,255,0.4);
+  border-right: 1px solid rgba(255,255,255,0.4);
+  z-index: 1;
+}
+
+.stackLabel {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  height: 40px;
+  background: #000;
+  border-top: 1px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* BLOCKS */
+.block {
+  position: absolute;
+  width: 56px;
+  height: 36px;
+  margin: 2px;
+  background: #222;
+  border: 2px solid #fff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  z-index: 2;
+}
+
+.block.placed {
+  background: #00ff88;
+  color: #000;
+}
+
+/* INTRO / OVERLAY */
+#intro, #overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  z-index: 10;
+}
+
+#intro {
+  flex-direction: column;
+  text-align: center;
+  padding: 24px;
+}
+
+#intro h1 {
+  font-size: 30px;
+  margin-bottom: 6px;
+}
+
+/* NEW SUBTITLE */
+.subtitle {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 14px;
+  color: #ffd400;
+}
+
+#intro p {
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+#startBtn {
+  padding: 10px 18px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 8px;
+  border: none;
+  background: #00ff88;
+  color: #000;
+}
+
+/* CONTROLS */
+#controls {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin: 12px auto 16px;
+  position: relative;
+  z-index: 20;
+}
+
+.ctrlBtn {
+  width: 72px;
+  height: 58px;
+  font-size: 24px;
+  font-weight: 700;
+  border-radius: 10px;
+  border: none;
+  background: #ffd400;
+  color: #000;
+}
+</style>
+</head>
+<body>
+
+<div id="topBar">
+  <div id="lives">Lives: 6</div>
+  <div id="status">Waiting</div>
+</div>
+
+<div id="game">
+  <button id="pauseBtn">Pause</button>
+
+  <div id="intro">
+    <h1>French Conjugation Game</h1>
+    <div class="subtitle">1st conj. pres. indicative</div>
+
+    <p>
+      ← → move block<br>
+      ↓ fast drop<br><br>
+      Stack <strong>3 blocks</strong> in each column
+    </p>
+
+    <button id="startBtn">Play</button>
+  </div>
+
+  <div id="overlay" style="display:none"></div>
+</div>
+
+<div id="controls">
+  <button class="ctrlBtn" id="btnLeft">←</button>
+  <button class="ctrlBtn" id="btnDown">↓</button>
+  <button class="ctrlBtn" id="btnRight">→</button>
+</div>
+
+<audio id="bgMusic" src="tetris.mp3" loop></audio>
+
+<script>
+/* JS UNCHANGED FROM LAST WORKING VERSION */
+const endings=["e","es","e","ons","ez","ent"];
+const labels=["je","tu","il / elle","nous","vous","ils / elles"];
+const maxLives=6,colWidth=60,blockHeight=40,fallSpeed=1,fastFall=6;
+
+const game=document.getElementById("game");
+const intro=document.getElementById("intro");
+const overlay=document.getElementById("overlay");
+const livesEl=document.getElementById("lives");
+const statusEl=document.getElementById("status");
+const pauseBtn=document.getElementById("pauseBtn");
+const startBtn=document.getElementById("startBtn");
+const btnLeft=document.getElementById("btnLeft");
+const btnRight=document.getElementById("btnRight");
+const btnDown=document.getElementById("btnDown");
+const music=document.getElementById("bgMusic");
+
+let lives=maxLives,paused=false,started=false,current=null;
+const stacks=Array.from({length:6},()=>[]);
+
+for(let i=0;i<6;i++){
+  const c=document.createElement("div");
+  c.className="column";c.style.left=(i*colWidth)+"px";
+  const l=document.createElement("div");
+  l.className="stackLabel";l.textContent=labels[i];
+  c.appendChild(l);game.appendChild(c);
+}
+
+startBtn.onclick=()=>{
+  intro.style.display="none";
+  started=true;paused=false;
+  pauseBtn.textContent="Pause";
+  statusEl.textContent="Playing";
+  music.play().catch(()=>{});
+  spawnBlock();
+};
+
+pauseBtn.onclick=()=>{
+  if(!started)return;
+  paused=!paused;
+  pauseBtn.textContent=paused?"Resume":"Pause";
+  statusEl.textContent=paused?"Paused":"Playing";
+  paused?music.pause():music.play().catch(()=>{});
+};
+
+function spawnBlock(){
+  const a=[];
+  if(stacks[0].length<3||stacks[2].length<3)a.push("e");
+  if(stacks[1].length<3)a.push("es");
+  if(stacks[3].length<3)a.push("ons");
+  if(stacks[4].length<3)a.push("ez");
+  if(stacks[5].length<3)a.push("ent");
+  if(!a.length)return;
+  const e=a[Math.random()*a.length|0];
+  const el=document.createElement("div");
+  el.className="block";el.textContent=e;
+  current={el,ending:e,col:2,y:0,speed:fallSpeed};
+  el.style.left=(current.col*colWidth+2)+"px";
+  game.appendChild(el);
+}
+
+function update(){
+  if(started&&!paused&&current){
+    current.y+=current.speed;
+    current.el.style.top=current.y+"px";
+    const h=stacks[current.col].length*blockHeight;
+    const lim=game.clientHeight-40-h;
+    if(current.y>=lim-blockHeight)land();
+  }
+  requestAnimationFrame(update);
+}
+
+function land(){
+  const v=current.ending==="e"?[0,2]:[endings.indexOf(current.ending)];
+  const s=stacks[current.col];
+  if(v.includes(current.col)&&s.length<3){
+    s.forEach(b=>b.textContent="");
+    current.el.classList.add("placed");
+    current.el.style.top=(game.clientHeight-40-(s.length+1)*blockHeight)+"px";
+    if(s.length<2)current.el.textContent="";
+    s.push(current.el);current=null;
+    if(stacks.every(x=>x.length===3))endGame("You Win!");
+    else spawnBlock();
+  }else{
+    game.removeChild(current.el);current=null;
+    lives--;livesEl.textContent="Lives: "+lives;
+    if(lives<=0)endGame("Game Over");
+    else spawnBlock();
+  }
+}
+
+function endGame(t){
+  paused=true;
+  statusEl.textContent="Ended";
+  overlay.textContent=t;
+  overlay.style.display="flex";
+  music.pause();
+}
+
+btnLeft.addEventListener("pointerdown",e=>{e.preventDefault();if(current&&!paused&&current.col>0){current.col--;current.el.style.left=(current.col*colWidth+2)+"px";}});
+btnRight.addEventListener("pointerdown",e=>{e.preventDefault();if(current&&!paused&&current.col<5){current.col++;current.el.style.left=(current.col*colWidth+2)+"px";}});
+btnDown.addEventListener("pointerdown",e=>{e.preventDefault();if(current&&!paused)current.speed=fastFall;});
+btnDown.addEventListener("pointerup",e=>{e.preventDefault();if(current)current.speed=fallSpeed;});
+
+update();
+</script>
+
+</body>
+</html>
